@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e0e10">
+<title>Jarvis</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@300;500;600&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* VOICE: calm, quiet, a butler that waits in the dark.
+   IDEA: a single lamp on a night table that brightens when spoken to.
+   PICTURE: one large glowing orb whose light follows Jarvis' state.
+   COLOUR and TYPE: graphite night, warm ivory light, one amber accent; Inter Tight + Inter.
+   LAYOUT: orb centred, status under it, last exchange below, settings in a sheet. */
+:root{--bg:#0e0e10;--ink:#ece8e1;--dim:#8b867d;--line:#2a2927;--lamp:#f3e6c8;--amber:#e3a548;--card:#18181b;--bad:#e5735f}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:radial-gradient(120% 80% at 50% 38%,#1a1916 0%,var(--bg) 60%);color:var(--ink);font:16px/1.55 Inter,system-ui,sans-serif;overflow:hidden;-webkit-user-select:none;user-select:none;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button,input,select,textarea{font:inherit;color:inherit}
+.app{height:100%;display:grid;grid-template-rows:auto 1fr auto;max-width:900px;margin:0 auto;padding:16px 20px}
+header{display:flex;justify-content:space-between;align-items:center;min-height:52px}
+.brand{font:600 20px/1 "Inter Tight",sans-serif;letter-spacing:.02em}
+.brand small{display:block;font:400 13px/1.4 Inter;color:var(--dim);letter-spacing:0;margin-top:4px}
+.icon{width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:transparent;display:grid;place-items:center;cursor:pointer}
+.icon:focus-visible,.btn:focus-visible{outline:2px solid var(--amber);outline-offset:3px}
+main{display:grid;place-items:center;align-content:center;gap:28px;text-align:center}
+.orb-wrap{position:relative;width:min(56vmin,340px);aspect-ratio:1;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.orb{position:absolute;inset:14%;border-radius:50%;
+  background:radial-gradient(circle at 38% 32%,#fffaf0 0%,var(--lamp) 22%,#c9a86a 58%,#5b4524 100%);
+  box-shadow:0 0 60px 10px rgba(243,230,200,.25),0 0 160px 40px rgba(227,165,72,.12),inset -18px -24px 40px rgba(60,40,10,.55);
+  transform:scale(var(--s,1));transition:filter .6s,opacity .6s,transform .08s linear}
+.ring{position:absolute;inset:4%;border-radius:50%;border:1px solid rgba(243,230,200,.18)}
+.ring.b{inset:0;border-color:rgba(243,230,200,.08)}
+.arc{position:absolute;inset:4%;border-radius:50%;border:2px solid transparent;border-top-color:var(--amber);opacity:0;transition:opacity .4s}
+body[data-state=off] .orb{filter:grayscale(1) brightness(.35);opacity:.8}
+body[data-state=sleeping] .orb{filter:brightness(.45) saturate(.7);animation:breathe 5s ease-in-out infinite}
+body[data-state=listening] .orb{filter:brightness(1.05)}
+body[data-state=thinking] .orb{filter:brightness(.8)}
+body[data-state=thinking] .arc{opacity:1;animation:spin 1.1s linear infinite}
+body[data-state=speaking] .orb{filter:brightness(1);animation:talk 1.2s ease-in-out infinite}
+@keyframes breathe{50%{filter:brightness(.6) saturate(.8)}}
+@keyframes talk{50%{transform:scale(1.04)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.orb,.arc{animation:none!important}}
+.status{font:300 clamp(26px,4.4vw,40px)/1.1 "Inter Tight",sans-serif;text-wrap:balance}
+.hint{color:var(--dim);font-size:15px;margin-top:6px;min-height:1.5em}
+.meter{width:min(70vw,360px);height:6px;border-radius:3px;background:var(--line);position:relative;overflow:hidden;opacity:0;transition:opacity .4s}
+body[data-state=sleeping] .meter{opacity:1}
+.meter i{position:absolute;inset:0 auto 0 0;width:0;background:var(--lamp);border-radius:3px}
+.meter b{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--amber)}
+.log{display:grid;gap:10px;width:min(100%,640px);text-align:left;min-height:96px;max-height:30vh;overflow:auto;-webkit-user-select:text;user-select:text}
+.msg{font-size:17px;line-height:1.5}
+.msg span{display:block;font-size:13px;color:var(--dim)}
+.msg.me{color:var(--dim)}
+.msg .go{margin-top:8px}
+footer{display:flex;justify-content:center;padding:8px 0 4px}
+.btn{min-height:48px;padding:0 26px;border-radius:24px;border:0;background:var(--lamp);color:#1b1710;font-weight:500;cursor:pointer}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink)}
+.btn.small{min-height:44px;padding:0 16px;font-size:15px}
+.toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#2a1d1a;border:1px solid #5b2f27;color:#ffd9d1;padding:12px 18px;border-radius:12px;max-width:min(92vw,560px);font-size:15px;display:none}
+/* settings sheet */
+.sheet{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;place-items:center;padding:16px;z-index:5}
+.sheet.open{display:grid}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;width:min(100%,560px);max-height:92vh;overflow:auto;padding:22px;-webkit-user-select:text;user-select:text}
+.panel h2{font:600 24px/1.1 "Inter Tight",sans-serif;margin:0 0 4px}
+.panel p.sub{color:var(--dim);margin:0 0 18px;font-size:15px}
+.f{display:grid;gap:6px;margin-bottom:16px}
+.f label{font-size:14px;color:var(--dim)}
+.f input,.f select,.f textarea{width:100%;min-height:46px;border-radius:10px;border:1px solid var(--line);background:#111113;padding:10px 12px;font-size:16px}
+.f textarea{min-height:96px;font:14px/1.5 ui-monospace,Menlo,monospace}
+.f input[type=range]{padding:0;border:0;background:none;accent-color:var(--amber)}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row>*{flex:1 1 160px}
+.check{display:flex;gap:10px;align-items:center;font-size:15px;margin-bottom:16px}
+.check input{width:22px;height:22px;accent-color:var(--amber)}
+.small-note{font-size:13px;color:var(--dim)}
+a{color:var(--amber)}
+</style>
+</head>
+<body data-state="off">
+<div class="app">
+  <header>
+    <div class="brand">Jarvis<small id="sub">Ready when you are</small></div>
+    <button class="icon" id="gear" aria-label="Settings">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+    </button>
+  </header>
+  <main>
+    <div class="orb-wrap" id="orb" role="button" aria-label="Talk to Jarvis" tabindex="0">
+      <div class="ring b"></div><div class="ring"></div><div class="arc"></div><div class="orb"></div>
+    </div>
+    <div>
+      <div class="status" id="status">Jarvis is off</div>
+      <div class="hint" id="hint">Tap Start, then leave this page open</div>
+    </div>
+    <div class="meter" aria-hidden="true"><i id="lvl"></i><b id="thr"></b></div>
+    <div class="log" id="log" aria-live="polite"></div>
+  </main>
+  <footer><button class="btn" id="start">Start Jarvis</button></footer>
+</div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true" aria-labelledby="st">
+  <div class="panel">
+    <h2 id="st">Settings</h2>
+    <p class="sub">Saved only on this iPad.</p>
+    <div class="f"><label for="key">Anthropic API key</label>
+      <input id="key" type="password" autocomplete="off" placeholder="sk-ant-…">
+      <span class="small-note">Create one at <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>. Billed per use, separately from your Claude plan.</span></div>
+    <div class="row">
+      <div class="f"><label for="model">Brain</label>
+        <select id="model">
+          <option value="claude-haiku-5-5">Claude Haiku 5.5 (fastest)</option>
+          <option value="claude-sonnet-5-5">Claude Sonnet 5.5 (smarter)</option>
+          <option value="claude-opus-5-5">Claude Opus 5.5 (smartest, slower)</option>
+        </select></div>
+      <div class="f"><label for="name">Your name</label><input id="name" placeholder="optional"></div>
+    </div>
+    <div class="row">
+      <div class="f"><label for="city">City for weather</label><input id="city" placeholder="empty = use location"></div>
+      <div class="f"><label for="addr">Jarvis says</label>
+        <select id="addr"><option value="Sie">Sie (formal)</option><option value="du">du (casual)</option></select></div>
+    </div>
+    <div class="row">
+      <div class="f"><label for="voice">German voice</label><select id="voice"></select></div>
+      <div class="f" style="flex:0 0 auto"><label>&nbsp;</label><button class="btn ghost small" id="test" type="button">Test voice</button></div>
+    </div>
+    <div class="f"><label for="rate">Speaking pace <span id="rateV"></span></label><input id="rate" type="range" min="0.7" max="1.15" step="0.01"></div>
+    <div class="f"><label for="sens">Clap sensitivity <span id="sensV"></span></label><input id="sens" type="range" min="1" max="10" step="1">
+      <span class="small-note">Higher reacts to softer claps, but also to more noise. The bar under the orb shows the level; the amber line is the trigger point.</span></div>
+    <label class="check"><input type="checkbox" id="web"> Let Jarvis search the web (small extra API cost)</label>
+    <div class="f"><label for="custom">Extra apps, one per line: Name = link</label>
+      <textarea id="custom" placeholder="AFFiNE = affine://&#10;Morgenroutine = shortcuts://run-shortcut?name=Morgenroutine"></textarea></div>
+    <div class="row"><button class="btn" id="save" type="button">Save</button><button class="btn ghost" id="close" type="button">Cancel</button></div>
+  </div>
+</div>
+<div class="toast" id="toast" role="alert"></div>
+
+<script>
+{
+const $ = id => document.getElementById(id);
+const DEF = {key:'',model:'claude-haiku-5-5',name:'',city:'',addr:'Sie',voice:'',rate:0.92,sens:5,web:false,custom:''};
+let S = {...DEF};
+try { S = {...DEF, ...JSON.parse(localStorage.getItem('jarvis.v1') || '{}')}; } catch (e) {}
+const saveS = () => { try { localStorage.setItem('jarvis.v1', JSON.stringify(S)); } catch (e) {} };
+
+// ---------- Apps Jarvis can open (iPadOS link schemes) ----------
+const BUILTIN = {
+  'Musik':'music://','Spotify':'spotify://','YouTube':'youtube://','Mail':'message://','Kalender':'calshow://',
+  'Notizen':'mobilenotes://','Erinnerungen':'x-apple-reminderkit://','Karten':'maps://','Fotos':'photos-redirect://',
+  'Dateien':'shareddocuments://','Kurzbefehle':'shortcuts://','Podcasts':'podcasts://','Bücher':'ibooks://',
+  'App Store':'itms-apps://','WhatsApp':'whatsapp://','Telegram':'tg://','Instagram':'instagram://','Netflix':'nflx://',
+  'Google Maps':'comgooglemaps://','Gmail':'googlegmail://','Chrome':'googlechrome://','Zoom':'zoomus://',
+  'Microsoft Teams':'msteams://','Outlook':'ms-outlook://','Notion':'notion://'
+};
+const apps = () => {
+  const a = {...BUILTIN};
+  for (const line of (S.custom || '').split('\n')) {
+    const i = line.indexOf('=');
+    if (i > 0) { const n = line.slice(0, i).trim(), u = line.slice(i + 1).trim(); if (n && u) a[n] = u; }
+  }
+  return a;
+};
+
+// ---------- UI helpers ----------
+const LABEL = {off:'Jarvis is off',sleeping:'Sleeping',listening:'Listening…',thinking:'Thinking…',speaking:'Speaking'};
+let state = 'off';
+function setState(s, hint) {
+  state = s; document.body.dataset.state = s; $('status').textContent = LABEL[s];
+  $('hint').textContent = hint ?? (s === 'sleeping' ? 'Clap twice, or tap the light' : '');
+  if (s !== 'listening' && s !== 'speaking') $('orb').querySelector('.orb').style.setProperty('--s', 1);
+}
+let toastT;
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => el.style.display = 'none', 7000); }
+function addMsg(who, text, link) {
+  const d = document.createElement('div'); d.className = 'msg' + (who === 'me' ? ' me' : '');
+  const s = document.createElement('span'); s.textContent = who === 'me' ? 'You' : 'Jarvis'; d.append(s, document.createTextNode(text));
+  if (link) { const b = document.createElement('a'); b.className = 'btn small go'; b.style.display = 'inline-grid'; b.style.placeItems = 'center'; b.style.textDecoration = 'none'; b.href = link.url; b.textContent = 'Open ' + link.name; if (/^https?:/.test(link.url)) { b.target = '_blank'; b.rel = 'noopener'; } d.append(document.createElement('br'), b); }
+  const log = $('log'); log.append(d); while (log.children.length > 6) log.firstChild.remove(); log.scrollTop = log.scrollHeight;
+  return d;
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ---------- Voice output (iPad's own German voices) ----------
+let voices = [];
+function scoreVoice(v) { const n = (v.name + ' ' + v.voiceURI).toLowerCase(); return (/premium/.test(n) ? 4 : 0) + (/enhanced|erweitert|verbessert/.test(n) ? 3 : 0) + (/anna|helena|martin|markus|petra|yannick/.test(n) ? 1 : 0) + (v.lang === 'de-DE' ? 1 : 0); }
+function loadVoices() {
+  voices = speechSynthesis.getVoices().filter(v => /^de/i.test(v.lang)).sort((a, b) => scoreVoice(b) - scoreVoice(a));
+  const sel = $('voice');
+  sel.innerHTML = voices.length ? voices.map(v => `<option value="${v.voiceURI.replace(/"/g, '&quot;')}">${v.name.replace(/</g, '&lt;')} (${v.lang})</option>`).join('') : '<option value="">No German voice found</option>';
+  if (S.voice && voices.some(v => v.voiceURI === S.voice)) sel.value = S.voice;
+}
+if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+const pickVoice = () => voices.find(v => v.voiceURI === S.voice) || voices[0] || null;
+function say(text) {
+  return new Promise(res => {
+    if (!('speechSynthesis' in window)) return res();
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    const v = pickVoice(); if (v) u.voice = v; u.lang = v ? v.lang : 'de-DE';
+    u.rate = +S.rate || 0.92; u.pitch = 0.95;
+    let done = false; const fin = () => { if (!done) { done = true; clearTimeout(t); res(); } };
+    // iOS sometimes never fires onend: fall back to a time estimate
+    const t = setTimeout(fin, 2500 + text.length * 95 / (u.rate || 1));
+    u.onend = fin; u.onerror = fin;
+    speechSynthesis.speak(u);
+  });
+}
+
+// ---------- Clap detection (microphone, high-pass, two sharp peaks) ----------
+let ctx, stream, src, hp, analyser, buf, tickT, prevPeak = 0, noise = 0.01, lastClap = 0, lastPeakAt = 0;
+const thrFor = () => { const s = +S.sens || 5; return {min: 0.34 - s * 0.028, ratio: 13 - s}; };
+async function micOn() {
+  if (stream) return;
+  stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+  ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+  if (ctx.state !== 'running') await ctx.resume();
+  src = ctx.createMediaStreamSource(stream);
+  hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1400;
+  analyser = ctx.createAnalyser(); analyser.fftSize = 1024; buf = new Float32Array(analyser.fftSize);
+  src.connect(hp); hp.connect(analyser);
+  prevPeak = 0; lastClap = 0;
+  clearInterval(tickT); tickT = setInterval(tick, 20);
+}
+function micOff() {
+  clearInterval(tickT);
+  try { src && src.disconnect(); } catch (e) {}
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  stream = null; src = null;
+}
+function tick() {
+  if (state !== 'sleeping' || !analyser) return;
+  analyser.getFloatTimeDomainData(buf);
+  let peak = 0, sum = 0;
+  for (let i = 0; i < buf.length; i++) { const a = Math.abs(buf[i]); if (a > peak) peak = a; sum += buf[i] * buf[i]; }
+  const rms = Math.sqrt(sum / buf.length);
+  const {min, ratio} = thrFor();
+  const thr = Math.max(min, noise * ratio);
+  $('lvl').style.width = Math.min(100, peak / 0.6 * 100) + '%';
+  $('thr').style.left = Math.min(98, thr / 0.6 * 100) + '%';
+  const now = performance.now();
+  const onset = peak > thr && prevPeak < thr * 0.6 && now - lastPeakAt > 110;
+  if (onset) { lastPeakAt = now; onClap(now); }
+  else if (peak < thr) noise = noise * 0.97 + rms * 0.03;
+  prevPeak = peak;
+}
+function onClap(now) {
+  const gap = now - lastClap;
+  if (lastClap && gap > 140 && gap < 900) { lastClap = 0; wake(); }
+  else lastClap = now;
+}
+
+// ---------- Weather (Open-Meteo, no key needed) ----------
+const WMO = {0:'klarer Himmel',1:'überwiegend klar',2:'teils bewölkt',3:'bedeckt',45:'Nebel',48:'Nebel mit Reif',51:'leichter Nieselregen',53:'Nieselregen',55:'starker Nieselregen',56:'gefrierender Nieselregen',57:'gefrierender Nieselregen',61:'leichter Regen',63:'Regen',65:'starker Regen',66:'gefrierender Regen',67:'gefrierender Regen',71:'leichter Schneefall',73:'Schneefall',75:'starker Schneefall',77:'Schneegriesel',80:'leichte Regenschauer',81:'Regenschauer',82:'heftige Regenschauer',85:'Schneeschauer',86:'starke Schneeschauer',95:'Gewitter',96:'Gewitter mit Hagel',99:'Gewitter mit Hagel'};
+let place = null, wx = null, wxAt = 0;
+const withTimeout = (p, ms) => Promise.race([p, sleep(ms).then(() => { throw new Error('timeout'); })]);
+async function getPlace() {
+  if (place && place.key === S.city) return place;
+  if (S.city) {
+    const r = await (await fetch(`https://geocoding-api.open-meteo.com/v1/search?count=1&language=de&name=${encodeURIComponent(S.city)}`)).json();
+    const g = r.results && r.results[0]; if (!g) throw new Error('city');
+    return place = {key: S.city, lat: g.latitude, lon: g.longitude, name: g.name};
+  }
+  const pos = await withTimeout(new Promise((ok, no) => navigator.geolocation.getCurrentPosition(ok, no, {maximumAge: 3600e3, timeout: 8000})), 9000);
+  const p = {key: '', lat: pos.coords.latitude, lon: pos.coords.longitude, name: ''};
+  try { const r = await (await withTimeout(fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${p.lat}&longitude=${p.lon}&localityLanguage=de`), 4000)).json(); p.name = r.city || r.locality || ''; } catch (e) {}
+  return place = p;
+}
+async function getWeather() {
+  if (wx && Date.now() - wxAt < 10 * 60e3 && place && place.key === S.city) return wx;
+  const p = await getPlace();
+  const u = `https://api.open-meteo.com/v1/forecast?latitude=${p.lat}&longitude=${p.lon}&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=4`;
+  const d = await (await withTimeout(fetch(u), 6000)).json();
+  wx = {
+    ort: p.name || 'aktueller Standort',
+    jetzt: {temperatur: Math.round(d.current.temperature_2m), gefuehlt: Math.round(d.current.apparent_temperature), wetter: WMO[d.current.weather_code] || 'unbekannt', wind_kmh: Math.round(d.current.wind_speed_10m)},
+    tage: d.daily.time.map((t, i) => ({datum: t, wetter: WMO[d.daily.weather_code[i]] || 'unbekannt', max: Math.round(d.daily.temperature_2m_max[i]), min: Math.round(d.daily.temperature_2m_min[i]), regen_prozent: d.daily.precipitation_probability_max[i]}))
+  };
+  wxAt = Date.now(); return wx;
+}
+const num = n => n < 0 ? 'minus ' + (-n) : String(n);
+async function greeting() {
+  const h = new Date().getHours();
+  const hello = h < 5 ? 'Guten Abend' : h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
+  const who = S.name ? ', ' + S.name : '';
+  const ask = S.addr === 'du' ? 'Was kann ich für dich tun?' : 'Was kann ich für Sie tun?';
+  try {
+    const w = await withTimeout(getWeather(), 7000), t = w.tage[0];
+    const where = w.ort !== 'aktueller Standort' ? `In ${w.ort} sind es` : 'Draußen sind es';
+    const rain = t.regen_prozent >= 40 ? `, Regenwahrscheinlichkeit ${t.regen_prozent} Prozent` : '';
+    return `${hello}${who}. ${where} gerade ${num(w.jetzt.temperatur)} Grad, ${w.jetzt.wetter}. Heute zwischen ${num(t.min)} und ${num(t.max)} Grad${rain}. ${ask}`;
+  } catch (e) {
+    return `${hello}${who}. Das Wetter kann ich gerade nicht abrufen. ${ask}`;
+  }
+}
+
+// ---------- Listening (Safari speech recognition) ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function hear() {
+  return new Promise(res => {
+    if (!SR) { toast('This browser has no speech recognition. Use Safari on iPadOS 14.5 or later.'); return res(''); }
+    const r = new SR(); r.lang = 'de-DE'; r.interimResults = true; r.continuous = false; r.maxAlternatives = 1;
+    let final = '', lastTxt = '', live = null, done = false;
+    const end = () => { if (done) return; done = true; clearTimeout(guard); try { r.abort(); } catch (e) {} res(final.trim()); };
+    const guard = setTimeout(() => { final = final || lastTxt; end(); }, 15000);
+    r.onresult = ev => {
+      let txt = '', allFinal = true;
+      for (const x of ev.results) { txt += x[0].transcript; if (!x.isFinal) allFinal = false; }
+      lastTxt = txt; if (allFinal) final = txt;
+      if (!live) live = addMsg('me', ''); live.lastChild.textContent = txt;
+      const o = $('orb').querySelector('.orb'); o.style.setProperty('--s', 1.06); setTimeout(() => o.style.setProperty('--s', 1), 120);
+    };
+    r.onerror = e => { if (e.error === 'not-allowed' || e.error === 'service-not-allowed') toast('Speech recognition is blocked. Allow it in Settings › Privacy & Security › Speech Recognition, and Dictation must be on (Settings › General › Keyboard).'); };
+    r.onend = () => { final = (final || lastTxt).trim(); if (live && !final) live.remove(); end(); };
+    try { r.start(); } catch (e) { end(); }
+  });
+}
+
+// ---------- The brain (Claude API) ----------
+let history = [];
+const TOOLS = () => {
+  const names = Object.keys(apps());
+  const t = [
+    {name: 'open_app', description: 'Öffnet eine App auf dem iPad. Nur Apps aus der Liste.', input_schema: {type: 'object', properties: {app: {type: 'string', enum: names}}, required: ['app']}},
+    {name: 'open_url', description: 'Öffnet eine Webseite in Safari (https-Adresse), z.B. eine Google-Suche oder eine Website, die der Nutzer nennt.', input_schema: {type: 'object', properties: {url: {type: 'string'}}, required: ['url']}},
+    {name: 'run_shortcut', description: 'Startet einen Kurzbefehl (Apple Shortcuts) mit genau diesem Namen. Damit lassen sich z.B. Licht, Timer, Wecker, Nachrichten oder Musik steuern, falls der Nutzer einen passenden Kurzbefehl angelegt hat.', input_schema: {type: 'object', properties: {name: {type: 'string'}, text: {type: 'string', description: 'optionaler Text als Eingabe'}}, required: ['name']}},
+    {name: 'get_weather', description: 'Aktuelles Wetter und Vorhersage für die nächsten 4 Tage am Ort des Nutzers.', input_schema: {type: 'object', properties: {}}}
+  ];
+  if (S.web) t.push({type: 'web_search_20250305', name: 'web_search', max_uses: 2});
+  return t;
+};
+function system() {
+  const now = new Date().toLocaleString('de-DE', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'});
+  return `Du bist Jarvis, ein ruhiger, höflicher und kompetenter Sprachassistent auf dem iPad${S.name ? ' von ' + S.name : ''}. Sprich den Nutzer mit „${S.addr}" an.
+Deine Antworten werden laut vorgelesen. Antworte daher immer auf Deutsch, knapp (meist ein bis drei Sätze), natürlich gesprochen: kein Markdown, keine Listen, keine Emojis, keine Links, keine Sonderzeichen. Schreibe Zahlen, Uhrzeiten und Einheiten so, wie man sie ausspricht.
+Wenn der Nutzer eine App öffnen möchte, rufe open_app auf und bestätige in einem kurzen Satz. Steht die App nicht in der Liste, sag das ehrlich und biete eine Alternative an (Website mit open_url, oder einen Kurzbefehl). Für Wetterfragen nutze get_weather. Du kannst keine Wecker, Timer oder Nachrichten direkt setzen; schlage dafür einen Kurzbefehl vor, falls keiner bekannt ist.
+Jetzt ist ${now}.`;
+}
+async function api(messages) {
+  const r = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {'content-type': 'application/json', 'x-api-key': S.key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true'},
+    body: JSON.stringify({model: S.model, max_tokens: 600, system: system(), tools: TOOLS(), messages})
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(r.status === 401 ? 'The API key was rejected. Check it in Settings.' : (d.error && d.error.message) || ('API error ' + r.status));
+  return d;
+}
+async function think(text) {
+  const msgs = [...history, {role: 'user', content: text}];
+  let action = null;
+  for (let i = 0; i < 6; i++) {
+    const d = await api(msgs);
+    msgs.push({role: 'assistant', content: d.content});
+    if (d.stop_reason === 'pause_turn') continue;
+    const uses = d.content.filter(b => b.type === 'tool_use');
+    if (d.stop_reason !== 'tool_use' || !uses.length) {
+      const reply = d.content.filter(b => b.type === 'text').map(b => b.text).join(' ').replace(/[*_#`]/g, '').trim() || 'Erledigt.';
+      history.push({role: 'user', content: text}, {role: 'assistant', content: reply});
+      history = history.slice(-16);
+      return {reply, action};
+    }
+    const results = [];
+    for (const u of uses) {
+      let out;
+      try {
+        if (u.name === 'open_app') { const url = apps()[u.input.app]; if (!url) throw new Error('unbekannte App'); action = {name: u.input.app, url}; out = {ok: true}; }
+        else if (u.name === 'open_url') { if (!/^https:\/\//.test(u.input.url)) throw new Error('nur https'); action = {name: 'Website', url: u.input.url}; out = {ok: true}; }
+        else if (u.name === 'run_shortcut') { const q = 'name=' + encodeURIComponent(u.input.name) + (u.input.text ? '&input=text&text=' + encodeURIComponent(u.input.text) : ''); action = {name: 'Kurzbefehl', url: 'shortcuts://run-shortcut?' + q}; out = {ok: true}; }
+        else if (u.name === 'get_weather') out = await getWeather();
+        else throw new Error('unbekanntes Werkzeug');
+      } catch (e) { out = {fehler: String(e.message || e)}; }
+      results.push({type: 'tool_result', tool_use_id: u.id, content: JSON.stringify(out)});
+    }
+    msgs.push({role: 'user', content: results});
+  }
+  return {reply: 'Das hat leider zu lange gedauert.', action};
+}
+function openAction(a) {
+  if (/^https?:/.test(a.url)) { const w = window.open(a.url, '_blank'); return !!w; }
+  location.href = a.url; return true;
+}
+
+// ---------- Conversation flow ----------
+let busy = false, started = false;
+async function wake() {
+  if (busy || state !== 'sleeping') return;
+  busy = true; micOff();
+  try {
+    setState('speaking');
+    const g = await greeting(); addMsg('jarvis', g); await say(g);
+    await converse();
+  } finally { busy = false; await toSleep(); }
+}
+async function converse() {
+  for (let turn = 0; turn < 12; turn++) {
+    setState('listening', 'Speak now');
+    const text = await hear();
+    if (!text) return;                                  // silence: go back to sleep
+    if (/^(danke|vielen dank|stopp|stop|das wär'?s|das war'?s|gute nacht|schlaf)\b/i.test(text)) { setState('speaking'); const b = 'Gern geschehen.'; addMsg('jarvis', b); await say(b); return; }
+    if (!S.key) { const m = 'Mir fehlt noch der API-Schlüssel. Bitte trage ihn in den Einstellungen ein.'; addMsg('jarvis', m); await say(m); return; }
+    setState('thinking');
+    let res;
+    try { res = await think(text); }
+    catch (e) { toast(e.message); const m = 'Entschuldigung, ich erreiche mein Gehirn gerade nicht.'; addMsg('jarvis', m); setState('speaking'); await say(m); return; }
+    addMsg('jarvis', res.reply, res.action);
+    setState('speaking'); await say(res.reply);
+    if (res.action) { openAction(res.action); return; }   // leaving Safari ends the conversation
+  }
+}
+async function toSleep() {
+  if (!started) return setState('off');
+  try { await micOn(); setState('sleeping'); }
+  catch (e) { setState('off', 'Microphone not available'); toast('Jarvis needs the microphone. In Safari, tap aA › Website Settings › Microphone › Allow.'); }
+}
+
+// ---------- Start / keep awake ----------
+let lock = null;
+async function keepAwake() { try { if ('wakeLock' in navigator) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
+$('start').onclick = async () => {
+  if (started) { started = false; micOff(); speechSynthesis.cancel(); try { lock && lock.release(); } catch (e) {} setState('off', 'Tap Start, then leave this page open'); $('start').textContent = 'Start Jarvis'; return; }
+  // these must run inside the tap on iPad
+  const hi = new SpeechSynthesisUtterance('Jarvis ist bereit.'); const v = pickVoice(); if (v) hi.voice = v; hi.lang = 'de-DE'; hi.rate = +S.rate || 0.92; speechSynthesis.speak(hi);
+  ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume();
+  started = true; $('start').textContent = 'Stop';
+  if (!S.key) toast('Add your Anthropic API key in Settings so Jarvis can answer.');
+  if (!location.protocol.startsWith('https') && location.hostname !== 'localhost') toast('The microphone only works when this page is opened over https.');
+  keepAwake();
+  getWeather().catch(() => {});                          // ask for location now, not mid-greeting
+  await toSleep();
+};
+$('orb').onclick = () => { if (state === 'sleeping') wake(); else if (state === 'speaking') speechSynthesis.cancel(); };
+$('orb').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('orb').click(); } };
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && started) { keepAwake(); if (!busy) toSleep(); }
+  else if (document.visibilityState === 'hidden' && !busy) micOff();
+});
+
+// ---------- Settings ----------
+function fill() {
+  for (const k of ['key', 'model', 'name', 'city', 'addr', 'rate', 'sens', 'custom']) $(k).value = S[k];
+  $('web').checked = !!S.web; loadVoices();
+  $('rateV').textContent = (+S.rate).toFixed(2); $('sensV').textContent = S.sens;
+}
+function openSheet() { fill(); $('sheet').classList.add('open'); }
+$('gear').onclick = openSheet;
+$('close').onclick = () => $('sheet').classList.remove('open');
+$('rate').oninput = e => $('rateV').textContent = (+e.target.value).toFixed(2);
+$('sens').oninput = e => { $('sensV').textContent = e.target.value; S.sens = +e.target.value; };
+$('test').onclick = () => { const keep = {...S}; S.voice = $('voice').value; S.rate = +$('rate').value; say('Guten Abend. Ich bin Jarvis, Ihr Assistent.'); S = keep; };
+$('save').onclick = () => {
+  const oldCity = S.city;
+  S = {...S, key: $('key').value.trim(), model: $('model').value, name: $('name').value.trim(), city: $('city').value.trim(), addr: $('addr').value, voice: $('voice').value, rate: +$('rate').value, sens: +$('sens').value, web: $('web').checked, custom: $('custom').value};
+  if (S.city !== oldCity) { place = null; wx = null; }
+  saveS(); $('sheet').classList.remove('open');
+};
+$('sheet').onclick = e => { if (e.target === $('sheet')) $('sheet').classList.remove('open'); };
+
+setState('off', 'Tap Start, then leave this page open');
+if (!S.key) setTimeout(openSheet, 400);
+}
+</script>
+</body>
+</html>
