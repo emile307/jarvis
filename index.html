@@ -173,7 +173,7 @@ function setState(s, hint) {
   if (s !== 'listening' && s !== 'speaking') $('orb').querySelector('.orb').style.setProperty('--s', 1);
 }
 let toastT;
-function toast(t) { const el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => el.style.display = 'none', 7000); }
+function toast(t) { const el = $('toast'); el.textContent = t; el.style.display = 'block'; clearTimeout(toastT); toastT = setTimeout(() => el.style.display = 'none', 15000); }
 function addMsg(who, text, link) {
   const d = document.createElement('div'); d.className = 'msg' + (who === 'me' ? ' me' : '');
   const s = document.createElement('span'); s.textContent = who === 'me' ? 'You' : 'Jarvis'; d.append(s, document.createTextNode(text));
@@ -214,7 +214,9 @@ let ctx, stream, src, hp, analyser, buf, tickT, prevPeak = 0, noise = 0.01, last
 const thrFor = () => { const s = +S.sens || 5; return {min: 0.34 - s * 0.028, ratio: 13 - s}; };
 async function micOn() {
   if (stream) return;
-  stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}});
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { const e = new Error('no mediaDevices'); e.name = 'NoMediaDevices'; throw e; }
+  try { stream = await navigator.mediaDevices.getUserMedia({audio: {echoCancellation: false, noiseSuppression: false, autoGainControl: false}}); }
+  catch (e) { if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e; stream = await navigator.mediaDevices.getUserMedia({audio: true}); }
   ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
   if (ctx.state !== 'running') await ctx.resume();
   src = ctx.createMediaStreamSource(stream);
@@ -412,8 +414,22 @@ async function converse() {
 }
 async function toSleep() {
   if (!started) return setState('off');
-  try { await micOn(); setState('sleeping'); }
-  catch (e) { setState('off', 'Microphone not available'); toast('Jarvis needs the microphone. In Safari, tap aA › Website Settings › Microphone › Allow.'); }
+  try { await micOn(); setState('sleeping'); return true; }
+  catch (e) {
+    micOff();
+    const n = (e && e.name) || 'Error';
+    const msg = {
+      NotAllowedError: 'Safari blockiert das Mikrofon für diese Seite. Tippe links in der Adresszeile auf das Strich-Symbol › Website-Einstellungen › Mikrofon › Erlauben und lade die Seite neu. Hilft das nicht: Einstellungen-App › Apps › Safari › Mikrofon › Erlauben.',
+      SecurityError: 'Das Mikrofon geht nur, wenn die Seite direkt in Safari über https://emile307.github.io/jarvis/ geöffnet ist.',
+      NoMediaDevices: 'Hier ist kein Mikrofon verfügbar. Öffne https://emile307.github.io/jarvis/ direkt in Safari (nicht aus einer anderen App heraus).',
+      NotReadableError: 'Das Mikrofon wird gerade von einer anderen App benutzt (Anruf, Siri, Sprachmemo …). Schließe sie und tippe erneut auf Start.',
+      AbortError: 'Das Mikrofon wird gerade von einer anderen App benutzt (Anruf, Siri, Sprachmemo …). Schließe sie und tippe erneut auf Start.',
+      NotFoundError: 'Kein Mikrofon gefunden.'
+    }[n] || 'Das Mikrofon ließ sich nicht starten.';
+    setState('off', 'Mikrofon: ' + n);
+    toast(msg + ' (' + n + ')');
+    return false;
+  }
 }
 
 // ---------- Start / keep awake ----------
@@ -421,15 +437,16 @@ let lock = null;
 async function keepAwake() { try { if ('wakeLock' in navigator) lock = await navigator.wakeLock.request('screen'); } catch (e) {} }
 $('start').onclick = async () => {
   if (started) { started = false; micOff(); speechSynthesis.cancel(); try { lock && lock.release(); } catch (e) {} setState('off', 'Tap Start, then leave this page open'); $('start').textContent = 'Start Jarvis'; return; }
-  // these must run inside the tap on iPad
-  const hi = new SpeechSynthesisUtterance('Jarvis ist bereit.'); const v = pickVoice(); if (v) hi.voice = v; hi.lang = 'de-DE'; hi.rate = +S.rate || 0.92; speechSynthesis.speak(hi);
+  // inside the tap: unlock speech and audio, then ask for the microphone first and alone
+  try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {}
   ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); ctx.resume();
   started = true; $('start').textContent = 'Stop';
-  if (!S.key) toast('Add your Anthropic API key in Settings so Jarvis can answer.');
-  if (!location.protocol.startsWith('https') && location.hostname !== 'localhost') toast('The microphone only works when this page is opened over https.');
+  const ok = await toSleep();
+  if (!ok) { started = false; $('start').textContent = 'Start Jarvis'; return; }
   keepAwake();
-  getWeather().catch(() => {});                          // ask for location now, not mid-greeting
-  await toSleep();
+  say('Jarvis ist bereit.');
+  if (!S.key) toast('Trag noch deinen API-Schlüssel in den Einstellungen (Zahnrad) ein, damit Jarvis antworten kann.');
+  setTimeout(() => getWeather().catch(() => {}), 2500);   // location prompt after the mic prompt, never at the same time
 };
 $('orb').onclick = () => { if (state === 'sleeping') wake(); else if (state === 'speaking') speechSynthesis.cancel(); };
 $('orb').onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('orb').click(); } };
